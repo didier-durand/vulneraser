@@ -99,4 +99,4 @@ All Docker images in this repo:
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
