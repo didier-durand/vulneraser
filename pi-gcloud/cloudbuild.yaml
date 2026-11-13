@@ -1,0 +1,95 @@
+# cloudbuild.yaml — build container images on Google Cloud Build.
+#
+# Builds both images defined in this repo and pushes them to Artifact Registry.
+#
+# Submit:
+#   gcloud builds submit --config cloudbuild.yaml \
+#       --substitutions=_REGION=us-central1,_REPOSITORY=vulneraser \
+#       .
+#
+# Substitutions:
+#   _REGION     Artifact Registry region (default us-central1)
+#   _REPOSITORY Artifact Registry repository name (default vulneraser)
+#
+# Prerequisites:
+#   - Artifact Registry repository created:
+#       gcloud artifacts repositories create vulneraser \
+#           --repository-format=docker --location=us-central1
+#   - Cloud Build API enabled:
+#       gcloud services enable cloudbuild.googleapis.com artifactregistry.googleapis.com
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: vulneraser
+
+steps:
+  # --- Build the pi-rpc image (Pi agent in RPC mode over TCP) ---
+  - name: gcr.io/cloud-builders/docker
+    id: build-pi-rpc
+    args:
+      - build
+      - -f
+      - Dockerfile_pi_rpc
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/pi-rpc:latest
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/pi-rpc:$SHORT_SHA
+      - .
+
+  # --- Build the open-code-review image ---
+  - name: gcr.io/cloud-builders/docker
+    id: build-ocr
+    waitFor:
+      - build-pi-rpc
+    args:
+      - build
+      - -f
+      - Dockerfile_ocr
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/open-code-review:latest
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/open-code-review:$SHORT_SHA
+      - .
+
+  # --- Push pi-rpc images to Artifact Registry ---
+  - name: gcr.io/cloud-builders/docker
+    id: push-pi-rpc-latest
+    waitFor:
+      - build-pi-rpc
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/pi-rpc:latest
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-pi-rpc-sha
+    waitFor:
+      - build-pi-rpc
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/pi-rpc:$SHORT_SHA
+
+  # --- Push open-code-review images to Artifact Registry ---
+  - name: gcr.io/cloud-builders/docker
+    id: push-ocr-latest
+    waitFor:
+      - build-ocr
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/open-code-review:latest
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-ocr-sha
+    waitFor:
+      - build-ocr
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/open-code-review:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/pi-rpc:latest
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/pi-rpc:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/open-code-review:latest
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/open-code-review:$SHORT_SHA

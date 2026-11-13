@@ -1,5 +1,12 @@
 # General 
 .DS_Store
+
+# Pi agent config and sessions (local only)
+.pi/
+
+# Python cache
+__pycache__/
+*.pyc
 .localized
 __MACOSX/
 .AppleDouble

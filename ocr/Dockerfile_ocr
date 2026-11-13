@@ -1,0 +1,41 @@
+can # Dockerfile_ocr — installs Open Code Review (https://open-codereview.ai)
+# Image provides the `ocr` CLI for AI-powered code review.
+#
+# Build:  docker build -f Dockerfile_ocr -t vulneraser-ocr .
+# Run:    docker run --rm -v "$PWD:/workspace" vulneraser-ocr review
+#
+# Docs:   https://open-codereview.ai/docs/installation
+# Repo:   https://github.com/alibaba/open-code-review
+
+FROM node:20-bookworm-slim
+
+# Open Code Review requires Git >= 2.41 for diff generation, code search,
+# and repository operations. Debian bookworm ships Git 2.39, so we install
+# from the official Git upstream repo to meet the minimum version.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg \
+        ; \
+    install -d -m 0755 /etc/apt/keyrings; \
+    curl -fsSL https://keyserver.ubuntu.com/pks/lookup?op=get\&search=0x648ACFD622F3D138 \
+        | gpg --dearmor -o /etc/apt/keyrings/git-core.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/git-core.gpg] https://ppa.launchpadcontent.net/git-core/ppa/ubuntu jammy main" \
+        > /etc/apt/sources.list.d/git-core.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends git; \
+    rm -rf /var/lib/apt/lists/*; \
+    git --version
+
+# Install the Open Code Review CLI globally from npm.
+# https://www.npmjs.com/package/@alibaba-group/open-code-review
+RUN npm install -g @alibaba-group/open-code-review && ocr --version
+
+WORKDIR /workspace
+VOLUME /workspace
+
+# Default entrypoint is the `ocr` command; pass subcommands as arguments.
+ENTRYPOINT ["ocr"]
+CMD ["--help"]

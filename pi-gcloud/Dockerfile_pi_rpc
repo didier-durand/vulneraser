@@ -1,0 +1,40 @@
+# Dockerfile_pi_rpc — Pi coding agent accessible in RPC mode over TCP.
+#
+# Pi's RPC mode is a JSONL protocol over stdin/stdout. This image wraps it with
+# socat so each TCP connection spawns a fresh `pi --mode rpc` subprocess, making
+# the RPC interface reachable over the network.
+#
+# Build:  docker build -f Dockerfile_pi_rpc -t pi-rpc .
+# Run:    docker run --rm -p 9471:9471 -e OPENAI_API_KEY=sk-... pi-rpc
+#
+# Docs:   https://pi.dev  (RPC mode: docs/rpc.md, docs/rpc-commands.md)
+
+FROM node:22-bookworm-slim
+
+# Pi needs git and ripgrep for its built-in tools; socat bridges TCP<->Pi RPC.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        git \
+        ripgrep \
+        socat \
+        ; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install the Pi coding agent CLI globally.
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+# Verify the install.
+RUN pi --version
+
+WORKDIR /workspace
+
+# Each TCP connection on 9471 spawns a new `pi --mode rpc --no-session` process.
+# socat pipes the socket bidirectionally to Pi's stdin/stdout JSONL stream.
+EXPOSE 9471
+# No `pty` — RPC uses clean JSONL pipes; a PTY would echo input and inject CR.
+# Child stderr goes to socat's stderr (visible via `docker logs`), not the socket.
+ENTRYPOINT ["socat", "TCP-LISTEN:9471,reuseaddr,fork", \
+            "EXEC:pi --mode rpc --no-session"]
